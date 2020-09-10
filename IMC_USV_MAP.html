@@ -1,0 +1,287 @@
+<!DOCTYPE html>  
+<html>  
+    <head>  
+        <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />  
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />  
+        <title>IMC_USV_MAP</title>  
+        <style type="text/css">  
+        html{height:100%;width:100%;}  
+        body{height:100%;margin:0px;padding:0px}  
+        #container{width: 100%;height:100%} 	
+        </style>  
+        
+		<script type="text/javascript" src="map_load.js"></script>
+		//<script type="text/javascript" src="qwebchannel.js"></script>
+		<link rel="stylesheet" href="./DrawingManager_min.css" />
+        
+    </head>  
+
+    <body>  
+        <div id="container"></div> 
+		<div class="input-card" style="width: 160px;height: 70px;margin-left: 10px;margin-right: 10px;">
+			<h4>左击获取经纬度：</h4>
+			<input type="text" readonly="true" id="lnglat" style="margin-bottom: 8px">
+			<button class="btn" onclick="drawn_line()" style="margin-bottom: 5px">绘制路径,双击结束</button>
+			<button class="btn" onclick="clearAll()" style="margin-bottom: 5px">清除所有覆盖物</button>
+			<button class="btn" onclick="continue_display()" style="margin-bottom: 5px">开始/继续动画</button>
+			<button class="btn" onclick="stop_display()" style="margin-bottom: 5px">停止动画</button>
+			<button class="btn" onclick="pause_display()" style="margin-bottom: 5px">暂停动画</button>
+			<button class="btn" onclick="hide_information()" style="margin-bottom: 5px">隐藏信息窗口</button>
+			<button class="btn" onclick="show_information()" style="margin-bottom: 5px">展示信息窗口</button>
+			<button class="btn" onclick="onShowMsgBox()" style="margin-bottom: 5px">测试标记点</button>
+			<input type="range" id="speed" min="100" max="1000" step="100" onchange="show_speed()">
+			<h6>设定的速度值：</h6>
+			<input type="text" readonly="true" id="show_speed" >
+		</div>
+        <script type="text/javascript"> 
+			var outputPath = 'tiles/';    //地图瓦片所在的文件夹
+			var fromat = ".png";    //格式
+			var map = new BMap.Map("container")
+			var point = new BMap.Point(114.424528,30.518715);  // 创建点坐标  
+			map.centerAndZoom(point, 15);                 // 初始化地图，设置中心点坐标和地图级别  
+			//添加地图类型控件
+			map.addControl(new BMap.MapTypeControl({
+				mapTypes:[
+							BMAP_NORMAL_MAP,
+							BMAP_HYBRID_MAP
+						]}));	  
+			map.setCurrentCity("武汉");          // 设置地图显示的城市 此项是必须设置的
+			map.enableScrollWheelZoom(true);     //开启鼠标滚轮缩放
+
+			//单击获取点击的经纬度
+			map.addEventListener("click",function(e) {
+				document.getElementById("lnglat").value = e.point.lng + ',' + e.point.lat;
+			});
+			//添加地图基础控件
+			map.addControl(new BMap.NavigationControl());
+			//var marker = new BMap.Marker(new BMap.Point(114.413102,30.512679));
+			//map.addOverlay(marker);
+
+
+			var line = [];          //编辑的所有折线的数组，
+			var show_line=[];       //line中最后一条折线，只展示这条
+			var display_line =[];   //lushu的动画跑的路径，与show_line相同
+			var path_=[];
+			var LonLat = [];
+			
+			var styleOptions = {
+				strokeColor:"red",    //边线颜色。
+				fillColor:"red",      //填充颜色。当参数为空时，圆形将没有填充效果。
+				strokeWeight: 3,       //边线的宽度，以像素为单位。
+				strokeOpacity: 0.8,	   //边线透明度，取值范围0 - 1。
+				fillOpacity: 0.6,      //填充的透明度，取值范围0 - 1。
+				strokeStyle: 'solid' //边线的样式，solid或dashed。
+			};
+		
+			var drawingManager = new BMapLib.DrawingManager(map, {
+				isOpen: false, //是否开启绘制模式
+				enableDrawingTool: false, //是否显示工具栏
+				drawingToolOptions: {
+					anchor: BMAP_ANCHOR_TOP_RIGHT, //位置
+					offset: new BMap.Size(5, 5), //偏离值
+				},
+				polylineOptions: styleOptions, //线的样式
+			});
+			drawingManager.setDrawingMode(BMAP_DRAWING_POLYLINE);
+		
+			var polylinecomplete = function(overlay)
+			{
+				display_line=[];
+				overlay.type = 'draw';//多加这一条 表面这些覆盖物都是通过画图工具画的 根据自己需求也可以设定id呀什么的
+				line.push(overlay);        
+				var i =line.length-1;
+				show_line=line[i].getPath();
+				for(var j=0;j<show_line.length;j++)
+				{
+					display_line.push(new BMap.Point(show_line[j].lng,show_line[j].lat)); 
+					LonLat[0] = show_line[j].lng;
+					LonLat[1] = show_line[j].lat;
+					path_[j] = LonLat;
+					LonLat = [];
+					//alert(path_[j][0]+","+path_[j][1]);
+					//alert(show_line[j].lng+","+show_line[j].lat);
+				};
+				//alert('line length is :'+line.length);
+				//alert('show_line length is:'+show_line.length);
+				map.setViewport(display_line);
+				drawingManager.close();
+				init_lushu();
+			};
+		
+			//添加鼠标绘制工具监听事件，用于获取绘制结果
+			drawingManager.addEventListener('polylinecomplete', polylinecomplete);
+			
+			function drawn_line(){
+				drawingManager.open();
+				//drawingManager.enableCalculate();        //计算折线长度
+				//alert(drawingManager.getDrawingMode());  //弹窗输出绘画模式
+				};
+		
+			function clearAll(){
+				var allOverLay = map.getOverlays();
+				for(var i=0;i<allOverLay.length;i++) {
+					//alert('remove overlay:'+i);
+					map.removeOverlay(allOverLay[i]);
+				};
+				line=[];
+				show_line=[];
+				display_line=[];
+				path_=[];
+			}
+					
+			BMapLib.LuShu.prototype._move=function(initPos,targetPos,effect) {
+				var pointsArr=[initPos,targetPos];  //点数组
+				var me = this,
+					//当前的帧数
+					currentCount = 0,
+					//步长，米/秒
+					timer = 10,
+					step = this._opts.speed / (1000 / timer),
+					//初始坐标
+					init_pos = this._projection.lngLatToPoint(initPos),
+					//获取结束点的(x,y)坐标
+					target_pos = this._projection.lngLatToPoint(targetPos),
+					//总的步长
+					count = Math.round(me._getDistance(init_pos, target_pos) / step);
+					//显示折线 syj201607191107
+				this._map.addOverlay(new BMap.Polyline(pointsArr, { 
+					strokeColor : "#111", 
+					strokeWeight : 5, 
+					strokeOpacity : 0.5 
+				})); // 画线 
+				//如果小于1直接移动到下一点
+				if (count < 1) {
+					me._moveNext(++me.i);
+					return;
+				}
+				me._intervalFlag = setInterval(function() {
+				//两点之间当前帧数大于总帧数的时候，则说明已经完成移动
+					if (currentCount >= count) {
+						clearInterval(me._intervalFlag);
+						//移动的点已经超过总的长度
+						if(me.i > me._path.length){
+							return;
+						}
+						//运行下一个点
+						me._moveNext(++me.i);
+					} 
+					else {
+						currentCount++;
+						var x = effect(init_pos.x, target_pos.x, currentCount, count),
+							y = effect(init_pos.y, target_pos.y, currentCount, count),
+							pos = me._projection.pointToLngLat(new BMap.Pixel(x, y));
+						//设置marker
+						if(currentCount == 1){
+							var proPos = null;
+							if(me.i - 1 >= 0){
+								proPos = me._path[me.i - 1];
+							}
+							if(me._opts.enableRotation == true) {
+									me.setRotation(proPos,initPos,targetPos);
+							}
+							if(me._opts.autoView) {
+								if(!me._map.getBounds().containsPoint(pos)){
+									me._map.setCenter(pos);
+								}  
+							}
+						}
+						//正在移动
+						me._marker.setPosition(pos);
+						//设置自定义overlay的位置
+						me._setInfoWin(pos);  
+					}
+				},timer);
+			};
+			
+			function init_lushu() 
+			{
+				lushu = new BMapLib.LuShu(map,display_line, {
+					defaultContent:"假装是个无人船",
+					autoView:true,//是否开启自动视野调整，如果开启那么路书在运动过程中会根据视野自动调整
+					icon  : new BMap.Icon('./images/car.png', new BMap.Size(52,26),{anchor : new BMap.Size(27, 13)}),
+					speed: 1000,
+					enableRotation:true,//是否设置marker随着道路的走向进行旋转
+					landmarkPois:[
+					{lng:114.442157,lat:31.519897,html:'加油站',pauseTime:2}]	
+				});
+			    //marker.enableMassClear(); //设置后可以隐藏改点的覆盖物
+				marker.hide();
+				lushu.start();
+			}
+		    
+			function start_display()
+			{
+				//map.clearOverlays();    //清除所有覆盖物
+			}
+
+			function continue_display() { lushu.start(); }
+
+			function stop_display() { lushu.stop(); }
+
+			function pause_display() { lushu.pause(); }
+
+			function hide_information() { lushu.hideInfoWindow(); }
+
+			function show_information() { lushu.showInfoWindow(); }
+		  
+			function show_speed()
+			{
+				var speed_given=document.getElementById("speed").value; 
+				document.getElementById("show_speed").value = speed_given;
+				lushu._opts.speed=speed_given;
+			} 
+
+			function set_speed(speed_) { lushu._opts.speed=speed_; }
+		  
+			var opts = {
+				position : point,    // 指定文本标注所在的地理位置
+				offset   : new BMap.Size(-30, 25)    //设置文本偏移量
+			}
+			var label = new BMap.Label("无人船起始点", opts);  // 创建文本标注对象
+			label.setStyle({
+				color : "black",
+				fontSize : "14px",
+				height : "20px",
+				lineHeight : "20px",
+				fontFamily:"微软雅黑"
+			});
+		  
+			function receive_and_drawline(t1,t2)
+			{
+			  //map.removeOverlay(line_);
+			  var BD_point = new BMap.Point(t1,t2);
+			  //alert(path_.length);
+			  path_.push(BD_point);
+			  if (path_.length==1) {
+					var marker=new BMap.Marker(path_[0]);
+					map.addOverlay(marker);
+					marker.setLabel(label);
+			  }
+			  else if(path_.length >1) {	  
+					var line_=new BMap.Polyline(path_,{strokeColor: '#911'});
+					map.addOverlay(line_);
+					map.setViewport(line_);
+			  }
+			}
+		  
+			new QWebChannel(qt.webChannelTransport, function(channel) {
+				window.bridge = channel.objects.bridge;
+				window.bridge.sigYourName.connect(function(name) {
+					alert(name);
+					});
+				});
+			function onShowMsgBox() {
+				//alert(path_);
+				bridge.showLonLat(path_)
+			}
+			
+			//map.addEventListener("mousemove", function (e) {
+			//	bridge.showLonLat(e.point.lng, e.point.lat);
+			//	});
+			// function onGetYourName() {
+			// 	bridge.getYourName();
+			// }
+			
+        </script>  
+    </body>  
+</html>
